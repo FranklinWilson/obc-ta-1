@@ -5,22 +5,25 @@
 }
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+<link rel="stylesheet" href="~/css/site.css" />
 
 <form method="get" class="mb-3">
-    <div class="row g-2 align-items-end">
-        <div class="col-auto">
-            <label asp-for="StartTime" class="form-label">Start Time</label>
-            <input asp-for="StartTime" class="form-control" type="datetime-local" />
-        </div>
-        <div class="col-auto">
-            <label asp-for="EndTime" class="form-label">End Time</label>
-            <input asp-for="EndTime" class="form-control" type="datetime-local" />
-        </div>
-        <div class="col-auto">
-            <button type="submit" class="btn btn-primary">Filter</button>
-        </div>
-        <div class="col-auto">
-            <a href="@(Url.Page("Index"))" class="btn btn-secondary">Clear Filter</a>
+    <div class="d-flex justify-content-center">
+        <div class="row g-2 align-items-end">
+            <div class="col-auto">
+                <label asp-for="StartTime" class="form-label">Start Time</label>
+                <input asp-for="StartTime" class="form-control" type="datetime-local" />
+            </div>
+            <div class="col-auto">
+                <label asp-for="EndTime" class="form-label">End Time</label>
+                <input asp-for="EndTime" class="form-control" type="datetime-local" />
+            </div>
+            <div class="col-auto">
+                <button type="submit" class="btn btn-custom-primary">Filter</button>
+            </div>
+            <div class="col-auto">
+                <a href="@(Url.Page("Index"))" class="btn btn-custom-secondary">Clear Filter</a>
+            </div>
         </div>
     </div>
 </form>
@@ -30,41 +33,75 @@
         <div class="mb-2">
             <span>Results: @Model.Entries?.Count()</span>
         </div>
-        <table class="table">
-            <thead>
-                <tr>
-                    <th>Time</th>
-                    <th>Recording ID</th>
-                    <th>Position Yards</th>
-                    <th>Temp (°C)</th>
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var data in Model.Entries)
-                {
+        <div class="table-container">
+            <table class="table" id="data-table">
+                <thead>
                     <tr>
-                        <td>@data.Time</td>
-                        <td>@data.RecordingId</td>
-                        <td>@data.PositionYards</td>
-                        <td>@data.Score</td>
+                        <th>Time</th>
+                        <th>Recording ID</th>
+                        <th>Position Yards</th>
+                        <th>Temp (°C)</th>
                     </tr>
+                </thead>
+                @if (Model.Entries == null || !Model.Entries.Any())
+                {
+                    <tbody>
+                        <tr>
+                            <td colspan="4" class="text-center">No data available</td>
+                        </tr>
+                    </tbody>
                 }
-            </tbody>
-        </table>
+                else
+                {
+                    <tbody>
+                        @for (int i = 0; i < Model.Entries.Count; i++)
+                        {
+                            var data = Model.Entries[i];
+                            <tr data-marker-index="@i" style="cursor:pointer;">
+                                <td>@data.Time</td>
+                                <td>@data.RecordingId</td>
+                                <td>@data.PositionYards</td>
+                                <td>@data.Score</td>
+                            </tr>
+                        }
+                    </tbody>
+                }
+            </table>
+        </div>
     </div>
-    <div class="col-md-6">
+    <div class="col-md-6 mt-4">
         <div id="map" style="height: 500px; width: 100%;"></div>
     </div>
 </div>
 
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 <script>
+    // Custom icons for markers
+    var defaultIcon = L.icon({
+        iconUrl: 'https://unpkg.com/leaflet/dist/images/marker-icon.png',
+        iconSize: [25, 41],
+        iconAnchor: [12, 41],
+        popupAnchor: [1, -34],
+        shadowUrl: 'https://unpkg.com/leaflet/dist/images/marker-shadow.png',
+        shadowSize: [41, 41]
+    });
+    var highlightIcon = L.icon({
+        iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
+        iconSize: [35, 56],
+        iconAnchor: [17, 56],
+        popupAnchor: [1, -34],
+        shadowUrl: 'https://unpkg.com/leaflet/dist/images/marker-shadow.png',
+        shadowSize: [56, 56],
+        className: 'highlight-marker'
+    });
+
     // Get location data from entries
     var entries = [
-        @foreach (var entry in Model.Entries)
+        @for (int i = 0; i < Model.Entries.Count; i++)
         {
+            var entry = Model.Entries[i];
             <text>
-            { lat: @entry.Lattitude, lng: @entry.Longitude, label: "@entry.Time.ToString("g") (ID: @entry.RecordingId)" },
+            { lat: @entry.Lattitude, lng: @entry.Longitude, label: "@entry.Time.ToString("g")" },
             </text>
         }
     ];
@@ -73,25 +110,76 @@
     var defaultLat = entries.length > 0 ? entries[0].lat : 51.5;
     var defaultLng = entries.length > 0 ? entries[0].lng : -0.08;
 
-    var map = L.map('map').setView([defaultLat, defaultLng], 13);
+    var map = L.map('map', { attributionControl: false }).setView([defaultLat, defaultLng], 13);
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 19,
-        attribution: '© OpenStreetMap'
     }).addTo(map);
 
+    var tableRows = Array.from(document.querySelectorAll('#data-table tbody tr'));
+
     // Add marker for each entry
-    entries.forEach(function (entry) {
+    var markers = [];
+    entries.forEach(function (entry, idx) {
         if (!isNaN(entry.lat) && !isNaN(entry.lng)) {
-            L.marker([entry.lat, entry.lng])
+            var marker = L.marker([entry.lat, entry.lng], { icon: defaultIcon })
                 .addTo(map)
                 .bindPopup(entry.label);
+
+            // Add event listener for marker icon
+            marker.on('click', function () {
+                marker.openPopup();
+                map.panTo(marker.getLatLng());
+                // Highlight the corresponding table row
+                tableRows.forEach(function (row) { row.classList.remove('highlight-row'); });
+                if (tableRows[idx]) {
+                    tableRows[idx].classList.add('highlight-row');
+                    tableRows[idx].scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+
+                // Also update marker highlight state
+                if (lastHighlighted !== null && markers[lastHighlighted]) {
+                    markers[lastHighlighted].setIcon(defaultIcon);
+                }
+                marker.setIcon(highlightIcon);
+                lastHighlighted = idx;
+            });
+
+        // Store marker for reference
+        markers.push(marker);
+        } else {
+            markers.push(null);
         }
     });
 
     // Fit map to markers
-    if (entries.length > 0) {
-        var group = new L.featureGroup(entries.map(e => L.marker([e.lat, e.lng])));
+    if (markers.filter(m => m).length > 0) {
+        var group = new L.featureGroup(markers.filter(m => m));
         map.fitBounds(group.getBounds().pad(0.2));
     }
+
+        // Highlight marker and table row on row click
+    var lastHighlighted = null;
+    document.querySelectorAll('#data-table tbody tr').forEach(function (row, idx) {
+        row.addEventListener('click', function () {
+            // Remove highlight styling from previous marker
+            if (lastHighlighted !== null && markers[lastHighlighted]) {
+                markers[lastHighlighted].setIcon(defaultIcon);
+            }
+
+            // Remove highlight from all rows
+            tableRows.forEach(function (r) { r.classList.remove('highlight-row'); });
+
+            // Highlight the selected row
+            row.classList.add('highlight-row');
+
+            // Highlight the selected marker
+            if (markers[idx]) {
+                markers[idx].setIcon(highlightIcon);
+                markers[idx].openPopup();
+                map.panTo(markers[idx].getLatLng());
+                lastHighlighted = idx;
+            }
+        });
+    });
 </script>

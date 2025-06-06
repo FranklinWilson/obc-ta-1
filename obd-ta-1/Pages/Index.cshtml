@@ -4,6 +4,8 @@
     ViewData["Title"] = "Home page";
 }
 
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+
 <form method="get" class="mb-3">
     <div class="row g-2 align-items-end">
         <div class="col-auto">
@@ -23,34 +25,73 @@
     </div>
 </form>
 
-<div class="mb-2">
-    <span>Results: @Model.Entries?.Count()</span>
+<div class="row">
+    <div class="col-md-6">
+        <div class="mb-2">
+            <span>Results: @Model.Entries?.Count()</span>
+        </div>
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Time</th>
+                    <th>Recording ID</th>
+                    <th>Position Yards</th>
+                    <th>Temp (°C)</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var data in Model.Entries)
+                {
+                    <tr>
+                        <td>@data.Time</td>
+                        <td>@data.RecordingId</td>
+                        <td>@data.PositionYards</td>
+                        <td>@data.Score</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    <div class="col-md-6">
+        <div id="map" style="height: 500px; width: 100%;"></div>
+    </div>
 </div>
 
-<table class="table">
-    <thead>
-        <tr>
-            <th>Time</th>
-            <th>Asset Name</th>
-            <th>Recording ID</th>
-            <th>Position Yards</th>
-            <th>Lattitude</th>
-            <th>Longitude</th>
-            <th>Score</th>
-        </tr>
-    </thead>
-    <tbody>
-        @foreach (var data in Model.Entries)
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script>
+    // Get location data from entries
+    var entries = [
+        @foreach (var entry in Model.Entries)
         {
-            <tr>
-                <td>@data.Time</td>
-                <td>@data.AssetName</td>
-                <td>@data.RecordingId</td>
-                <td>@data.PositionYards</td>
-                <td>@data.Lattitude</td>
-                <td>@data.Longitude</td>
-                <td>@data.Score</td>
-            </tr>
+            <text>
+            { lat: @entry.Lattitude, lng: @entry.Longitude, label: "@entry.Time.ToString("g") (ID: @entry.RecordingId)" },
+            </text>
         }
-    </tbody>
-</table>
+    ];
+
+    // Set default map center
+    var defaultLat = entries.length > 0 ? entries[0].lat : 51.5;
+    var defaultLng = entries.length > 0 ? entries[0].lng : -0.08;
+
+    var map = L.map('map').setView([defaultLat, defaultLng], 13);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '© OpenStreetMap'
+    }).addTo(map);
+
+    // Add marker for each entry
+    entries.forEach(function (entry) {
+        if (!isNaN(entry.lat) && !isNaN(entry.lng)) {
+            L.marker([entry.lat, entry.lng])
+                .addTo(map)
+                .bindPopup(entry.label);
+        }
+    });
+
+    // Fit map to markers
+    if (entries.length > 0) {
+        var group = new L.featureGroup(entries.map(e => L.marker([e.lat, e.lng])));
+        map.fitBounds(group.getBounds().pad(0.2));
+    }
+</script>
